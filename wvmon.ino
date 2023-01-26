@@ -4,15 +4,15 @@
 #include <nvs_flash.h>
 #include <Preferences.h>
 Preferences prefs;
-#define PREFS_NS "thermo"
+#define PREFS_NS "wvmon"
 
 // ---------------------------------------------------------------------------
 // Adafruit IO
 // ---------------------------------------------------------------------------
 #include "AdafruitIO_WiFi.h"
-AdafruitIO_WiFi *io = NULL; // (IO_USERNAME, IO_KEY, WIFI_SSID, WIFI_PASS);
-AdafruitIO_Feed *color = NULL; // = io.feed("color");
-AdafruitIO_Feed *temperature = NULL; // = io.feed("temp");
+AdafruitIO_WiFi *io = NULL;
+AdafruitIO_Feed *color = NULL;
+AdafruitIO_Feed *temperature = NULL;
 
 // ---------------------------------------------------------------------------
 // Adafruit MCP9808 QT board
@@ -29,7 +29,6 @@ bool sensor_inited = false;
 // ---------------------------------------------------------------------------
 #include <ArduinoOTA.h>
 bool arduino_ota_inited = false;
-#define DEFAULT_OTA_HOSTNAME "esp32feather"
 
 // ---------------------------------------------------------------------------
 // Arduino-Timer
@@ -48,6 +47,9 @@ Timer<3> timer;
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, PIXEL_TYPE);
 
+// ---------------------------------------------------------------------------
+// constants
+// ---------------------------------------------------------------------------
 #define INPUT_BUFFER_SIZE 256
 
 
@@ -65,8 +67,15 @@ void setup() {
   // prefs
   prefs.begin(PREFS_NS, false);
 
+  // neopixel init
+  pixels.begin();
+  pixels.show();
+
   // Adafruit IO
   connectIO();
+
+  // Arduino OTA
+  init_arduino_ota();
 
   // set up the temp sensor
   sensor_inited = !!sensor.begin(0x18);
@@ -77,24 +86,13 @@ void setup() {
     Serial.println("Found MCP9808.");
   }
    
-  // neopixel init
-  pixels.begin();
-  pixels.show();
-
-  // hopefully we're connected by now  
-  Serial.println();
-  Serial.println(io->statusText());
-
-  init_arduino_ota();
-
-  if (io->status() >= AIO_CONNECTED) {
-    // we are connected
-    color->get();
-  }
-
+  // start the timer
   timer.in(SENSE_INTERVAL, sense_temperature);
 }
 
+// ---------------------------------------------------------------------------
+// loop
+// ---------------------------------------------------------------------------
 void loop() {
   // io.run() refreshes the connection and processes incoming
   // messages
@@ -119,6 +117,7 @@ void loop() {
   }
 
   timer.tick();
+  // REVIEW does it matter that we spin hard when the ssid isn't set?
 }
 
 void connectIO()
@@ -137,23 +136,24 @@ void connectIO()
       return;
     }
     color = io->feed(prefs.getString("io_color", "color").c_str());
+    color->onMessage(handleColorMessage);
     temperature = io->feed(prefs.getString("io_feed", "temp").c_str());
   }
 
   Serial.print("Connecting to Adafruit IO");
   io->connect();
 
-  // set up a message handler for the 'color' feed.
-  // the handleMessage function (defined below)
-  // will be called whenever a message is
-  // received from adafruit io.
-  color->onMessage(handleMessage);
-
   // wait for a connection
   for(int i = 0; io->status() < AIO_CONNECTED && i < 10; i++) {
     io->run();
     Serial.print(".");
     delay(500);
+  }
+
+  // if we're connected, fetch the initial pixel color
+  Serial.println(io->statusText());
+  if (io->status() >= AIO_CONNECTED) {
+    color->get();
   }
 }
 
@@ -354,7 +354,7 @@ void serialEvent() {
 // this function is called whenever a 'color' message
 // is received from Adafruit IO. it was attached to
 // the color feed in the setup() function above.
-void handleMessage(AdafruitIO_Data *data) {
+void handleColorMessage(AdafruitIO_Data *data) {
 
   // print RGB values and hex value
   Serial.println("Received HEX: ");
@@ -367,5 +367,4 @@ void handleMessage(AdafruitIO_Data *data) {
   }
 
   pixels.show();
-
 }
