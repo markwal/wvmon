@@ -29,6 +29,12 @@ bool sensor_inited = false;
 #define SENSE_INTERVAL 10000
 
 // ---------------------------------------------------------------------------
+// Adafruit 128x64 OLED FeatherWing
+// ---------------------------------------------------------------------------
+#include <Adafruit_SH110X.h>
+Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
+
+// ---------------------------------------------------------------------------
 // Over-The-Air Update
 // Inherits wifi set up from Adafruit IO
 // ---------------------------------------------------------------------------
@@ -36,6 +42,8 @@ bool sensor_inited = false;
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 bool arduino_ota_inited = false;
+String ota_hostname;
+String ota_hash;
 
 // ---------------------------------------------------------------------------
 // Arduino-Timer
@@ -296,7 +304,9 @@ void init_arduino_ota()
 
   // Hostname defaults to esp3232-[MAC]
   if (prefs.isKey("ota_hostname")) {
-    ArduinoOTA.setHostname(prefs.getString("ota_hostname").c_str());
+    ota_hostname = prefs.getString("ota_hostname");
+    Serial.print("Setting ota_hostname: "); Serial.println(ota_hostname);
+    ArduinoOTA.setHostname(ota_hostname.c_str());
   }
 
   // No authentication by default
@@ -306,7 +316,9 @@ void init_arduino_ota()
   // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
   // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
   if (prefs.isKey("ota_hash")) {
-    ArduinoOTA.setPasswordHash(prefs.getString("ota_hash").c_str());
+    ota_hash = prefs.getString("ota_hash");
+    Serial.println("Setting ota_hash.");
+    ArduinoOTA.setPasswordHash(ota_hash.c_str());
   }
 
   ArduinoOTA
